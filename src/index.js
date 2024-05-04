@@ -12,7 +12,6 @@ const contract = new ethers.Contract(M3TER_CONTRACT, ABI, provider);
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
-client.commands = new Collection();
 
 client.on("ready", async () => {
   console.log("Bot logged-in & online");

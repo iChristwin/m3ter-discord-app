@@ -1,4 +1,5 @@
 import {
+  EXPLORER,
   VOID_ADDRESS,
   M3TER_CONTRACT,
   DISCORD_CHANNEL,
@@ -7,107 +8,79 @@ import {
 
 import { EmbedBuilder } from "discord.js";
 
-export async function getPrice(tokenId) {}
-
-export async function getMetadata(tokenId) {
-  return fetch(await contract.tokenURI(tokenId)).then(async function (res) {
-    return await res.json();
-  });
+async function getPrice(tokenId) {
+  return "";
 }
 
-function getSrcAttribute(data) {
-  const attr = data.attributes.find(
-    (attribute) => attribute.trait_type === "src"
-  );
-  return attr.value;
+async function getMetadata(contract, tokenId) {
+  const tokenURI = await contract.tokenURI(tokenId);
+  const res = await fetch(tokenURI);
+  return res.json();
 }
 
-export async function prepMessage(
-  metadata,
-  owner,
-  tokenId,
-  action,
-  price,
-  color
-) {
-  const m3ter_name = metadata.name.replace(/\w+/g, function (w) {
+async function createEmbed(metadata, owner, tokenId, action, price, color) {
+  const explorerUrl = `${EXPLORER}/token/${M3TER_CONTRACT}/instance/${tokenId}`;
+  const m3terName = metadata.name.replace(/\w+/g, function (w) {
     return w[0].toUpperCase() + w.slice(1).toLowerCase();
   });
-  const version = getSrcAttribute(metadata);
+
   return new EmbedBuilder()
-    .setTimestamp()
     .setColor(color)
-    .setTitle(`${m3ter_name} has been ${action}!`)
-    .setURL(
-      `https://gnosis.blockscout.com/token/${M3TER_CONTRACT}/instance/${tokenId}`
-    )
+    .setURL(explorerUrl)
+    .setThumbnail(metadata.image)
+    .setTitle(`${m3terName} has been ${action}!`)
     .addFields(
       { name: "Owner", value: owner },
-      { name: "TokenId", value: tokenId, inline: true },
+      { name: "TokenId", value: tokenId.toString(), inline: true },
       { name: "Price", value: price, inline: true }
     )
-    .setAuthor({
-      name: m3ter_name,
-      iconURL: metadata.image,
-      url: `https://gnosis.blockscout.com/token/${M3TER_CONTRACT}/instance/${tokenId}`,
-    })
-    .setFooter({
-      text: version ? version : "M3ters",
-      iconURL:
-        "https://imagedelivery.net/BXluQx4ige9GuW0Ia56BHw/51b66d3c-d9c4-4896-8403-fc32179fec00/original",
-    });
+    .setAuthor({ name: m3terName, url: explorerUrl, iconURL: metadata.image });
 }
 
 export async function handleTransfers(client, contract) {
+  console.log("awaiting transfers");
   const channel = client.channels.cache.get(DISCORD_CHANNEL);
 
   contract.on("Transfer", async (from, to, tokenId, event) => {
-    if (from === VOID_ADDRESS) {
-      const metadata = getMetadata(tokenId);
-      const msg = await prepMessage(
+    try {
+      console.log("transfer detected");
+      const metadata = await getMetadata(contract, tokenId);
+      let price = "??",
+        action = "transferred 📦",
+        color = "White";
+
+      if (from === VOID_ADDRESS) {
+        action = "minted ✨";
+        color = "Gold";
+      } else if (to === VOID_ADDRESS) {
+        action = "burned 🔥";
+        color = "Red";
+      } else if (to === LISTINGS_CONTRACT) {
+        price = await getPrice(tokenId);
+        action = "listed 🏷️";
+        color = "Blue";
+      } else if (from === LISTINGS_CONTRACT) {
+        price = await getPrice(tokenId);
+        action = "sold 💰";
+        color = "Green";
+      } else {
+        console.log("Uninteresting transfer, no alert");
+        return;
+      }
+
+      console.log(`this tx ${action} a M3ter`);
+      const msg = await createEmbed(
         metadata,
         to,
-        `${tokenId}`,
-        "minted ✨",
-        "??",
-        "Gold"
+        tokenId,
+        action,
+        price,
+        color
       );
       channel.send({ embeds: [msg] });
-    } else if (to === VOID_ADDRESS) {
-      const metadata = getMetadata(tokenId);
-      const msg = await prepMessage(
-        metadata,
-        from,
-        `${tokenId}`,
-        "burned 🔥",
-        "??",
-        "Red"
-      );
-      channel.send({ embeds: [msg] });
-    } else if (to === LISTINGS_CONTRACT) {
-      const metadata = getMetadata(tokenId);
-      const price = getPrice(tokenId);
-      const msg = await prepMessage(
-        metadata,
-        from,
-        `${tokenId}`,
-        "listed 🏷️",
-        `$${price}`,
-        "Blue"
-      );
-      channel.send({ embeds: [msg] });
-    } else if (from === LISTINGS_CONTRACT) {
-      const metadata = getMetadata(tokenId);
-      const price = getPrice(tokenId);
-      const msg = await prepMessage(
-        metadata,
-        from,
-        `${tokenId}`,
-        "sold 💰",
-        `$${price}`,
-        "Green"
-      );
-      channel.send({ embeds: [msg] });
+      console.log("waiting again");
+    } catch (err) {
+      console.log(err);
     }
   });
 }
