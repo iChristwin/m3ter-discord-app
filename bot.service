@@ -2,9 +2,10 @@
 Description=Discord bot for alerting community about token transfers 
 
 [Service]
-User=me
-WorkingDirectory=/home/me/Switch-LoRaWAN-Gateway/
-ExecStart=python3 gateway.py
+User=ichristwin
+WorkingDirectory=/home/ichristwin/Dev/m3ter-discord-app
+
+ExecStart=npm run bot
 
 [Install]
 WantedBy=multi-user.target
